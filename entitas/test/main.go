@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/jangsky215/go-entitas"
+	"github.com/cloudfreexiao/entitas"
 	"math"
 )
 
