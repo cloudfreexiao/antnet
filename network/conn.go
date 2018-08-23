@@ -10,5 +10,5 @@ type Conn interface {
 	LocalAddr() net.Addr
 	RemoteAddr() net.Addr
 	Close()
-	Destory()
+	Destroy()
 }

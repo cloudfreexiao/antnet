@@ -11,6 +11,8 @@ import (
 
 type Context actor.Context
 
+// TODO: add ECS context
+
 type IService interface {
 	IServiceData
 	OnReceive(context Context)
@@ -28,6 +30,8 @@ type ActorService struct {
 	serviceIns IService
 	router map[reflect.Type] MessageFunc
 }
+
+
 
 func (s *ActorService) Receive(context actor.Context)  {
 	switch msg := context.Message().(type) {
@@ -76,4 +80,8 @@ func StartService(s IService)  {
 
 func DestoryService(s *ActorService)  {
 	s.serviceIns.OnDestory()
+}
+
+func (s *ActorService) Update()  {
+	
 }

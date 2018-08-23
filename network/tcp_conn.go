@@ -44,7 +44,7 @@ func newTCPConn(conn net.Conn, pendingWriteNum int, msgParser *MsgParser) *TCPCo
 	return tcpConn
 }
 
-func (tcpConn *TCPConn) doDestory() {
+func (tcpConn *TCPConn) doDestroy() {
 	tcpConn.conn.(*net.TCPConn).SetLinger(0)
 	tcpConn.conn.Close()
 
@@ -54,10 +54,10 @@ func (tcpConn *TCPConn) doDestory() {
 	}
 }
 
-func (tcpConn *TCPConn) Destory()  {
+func (tcpConn *TCPConn) Destroy()  {
 	tcpConn.Lock()
 	defer tcpConn.Unlock()
-	tcpConn.doDestory()
+	tcpConn.doDestroy()
 }
 
 func (tcpConn *TCPConn) Close()  {
