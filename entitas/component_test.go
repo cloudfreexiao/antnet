@@ -1,16 +1,13 @@
 package entitas
 
 import (
+	. "github.com/smartystreets/goconvey/convey"
 	"sort"
 	"testing"
-
-	. "github.com/smartystreets/goconvey/convey"
 )
 
-// Component index
-
 const (
-	ComponentA ComponentType = iota
+	ComponentA int = iota
 	ComponentB
 	ComponentC
 	ComponentD
@@ -19,64 +16,120 @@ const (
 	NumComponents
 )
 
-// --- A ----------------------------------------------------------------------
+// ------- A
 
 type componentA struct {
 	value int
 }
 
-func NewComponentA(value int) Component    { return &componentA{value: value} }
-func (c1 *componentA) Type() ComponentType { return ComponentA }
-func (c1 *componentA) String() string      { return "A" }
+func NewComponentA(value int) Component {
+	return &componentA{value}
+}
 
-// --- B ----------------------------------------------------------------------
+func (c1 *componentA) int() int {
+	return ComponentA
+}
 
-type componentB struct{ value float32 }
+func (c1 *componentA) String() string {
+	return "A"
+}
 
-func NewComponentB(value float32) Component { return &componentB{value: value} }
-func (c2 *componentB) Type() ComponentType  { return ComponentB }
-func (c2 *componentB) String() string       { return "B" }
+// ------- B
 
-// --- C ----------------------------------------------------------------------
+type componentB struct {
+	value float32
+}
 
-type componentC struct{}
+func NewComponentB(value float32) Component {
+	return &componentB{value}
+}
 
-func NewComponentC() Component            { return &componentC{} }
-func (c *componentC) Type() ComponentType { return ComponentC }
+func (c1 *componentB) int() int {
+	return ComponentB
+}
 
-// --- D ----------------------------------------------------------------------
+func (c1 *componentB) String() string {
+	return "B"
+}
 
-type componentD struct{}
+// ------- C
 
-func NewComponentD() Component            { return &componentD{} }
-func (d *componentD) Type() ComponentType { return ComponentD }
+type componentC struct {
+}
 
-// --- E ----------------------------------------------------------------------
+func NewComponentC() Component {
+	return &componentC{}
+}
 
-type componentE struct{}
+func (c1 *componentC) int() int {
+	return ComponentC
+}
 
-func NewComponentE() Component            { return &componentE{} }
-func (e *componentE) Type() ComponentType { return ComponentE }
+func (c1 *componentC) String() string {
+	return "C"
+}
 
-// --- F ----------------------------------------------------------------------
+// ------- D
 
-type componentF struct{}
+type componentD struct {
+}
 
-func NewComponentF() Component            { return &componentF{} }
-func (f *componentF) Type() ComponentType { return ComponentF }
+func NewComponentD() Component {
+	return &componentC{}
+}
 
-// --- Tests ------------------------------------------------------------------
+func (c1 *componentD) int() int {
+	return ComponentD
+}
+
+func (c1 *componentD) String() string {
+	return "D"
+}
+
+// ------- E
+
+type componentE struct {
+}
+
+func NewComponentE() Component {
+	return &componentE{}
+}
+
+func (c1 *componentE) int() int {
+	return ComponentE
+}
+
+func (c1 *componentE) String() string {
+	return "E"
+}
+
+// ------- F
+
+type componentF struct {
+}
+
+func NewComponentF() Component {
+	return &componentF{}
+}
+
+func (c1 *componentF) int() int {
+	return ComponentF
+}
+
+func (c1 *componentF) String() string {
+	return "F"
+}
 
 func TestComponentSorting(t *testing.T) {
 	Convey("Given components and a component list", t, func() {
 		c1 := NewComponentA(1)
 		c2 := NewComponentB(0.0)
+
 		components := []Component{c2, c1}
 
 		Convey("It should be sortable by type", func() {
-			sort.Sort(ComponentsByType(components))
+			sort.Sort(Components(components))
 			So(components, ShouldResemble, []Component{c1, c2})
 		})
-
 	})
 }

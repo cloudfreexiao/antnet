@@ -1,59 +1,50 @@
 package entitas
 
+type GroupChanged func(Group, Entity)
+
 type Group interface {
 	Entities() []Entity
 	HandleEntity(e Entity)
 	UpdateEntity(e Entity)
-	WillRemoveEntity(e Entity)
 	Matches(e Entity) bool
 	ContainsEntity(e Entity) bool
-	AddCallback(e GroupEvent, c GroupCallback)
+
+	AddEvent(EventType, GroupChanged)
+	RemoveAllEvents()
 }
-
-type GroupEvent uint
-
-const (
-	EntityAdded GroupEvent = iota
-	EntityWillBeRemoved
-	EntityRemoved
-)
-
-type GroupCallback func(Group, Entity)
 
 type group struct {
 	entities         map[EntityID]Entity
 	cache            []Entity
 	cacheInvalidated bool
-	matcher          Matcher
-	callbacks        map[GroupEvent][]GroupCallback
+	matchers         []Matcher
+
+	groupChanged map[EventType][]GroupChanged
 }
 
-func NewGroup(matcher Matcher) Group {
+func newGroup(matchers ...Matcher) Group {
 	return &group{
-		entities:         make(map[EntityID]Entity),
-		cache:            make([]Entity, 0),
-		cacheInvalidated: false,
-		matcher:          matcher,
-		callbacks:        make(map[GroupEvent][]GroupCallback),
+		entities:     make(map[EntityID]Entity),
+		matchers:     matchers,
+		groupChanged: make(map[EventType][]GroupChanged),
 	}
 }
 
 func (g *group) Entities() []Entity {
-	if g.cacheInvalidated {
-		cache := make([]Entity, len(g.entities))
-		i := 0
+	cache := g.cache
+	if cache == nil {
+		cache = make([]Entity, 0, len(g.entities))
+
 		for _, e := range g.entities {
-			cache[i] = e
-			i++
+			cache = append(cache, e)
 		}
 		g.cache = cache
-		g.cacheInvalidated = false
 	}
-	return g.cache
+	return cache
 }
 
 func (g *group) HandleEntity(e Entity) {
-	if g.matcher.Matches(e) {
+	if g.Matches(e) {
 		g.addEntity(e)
 	} else {
 		g.removeEntity(e)
@@ -62,77 +53,56 @@ func (g *group) HandleEntity(e Entity) {
 
 func (g *group) UpdateEntity(e Entity) {
 	if _, ok := g.entities[e.ID()]; ok {
-		g.callback(EntityRemoved, e)
-		g.callback(EntityAdded, e)
-	}
-}
-
-func (g *group) WillRemoveEntity(e Entity) {
-	if _, ok := g.entities[e.ID()]; ok {
-		g.callback(EntityWillBeRemoved, e)
+		g.onGroupChanged(EventUpdated, e)
 	}
 }
 
 func (g *group) Matches(e Entity) bool {
-	return g.matcher.Matches(e)
+	for _, m := range g.matchers {
+		if !m.Matches(e) {
+			return false
+		}
+	}
+	return true
 }
 
 func (g *group) ContainsEntity(e Entity) bool {
-	if _, ok := g.entities[e.ID()]; ok {
-		return true
-	}
-	return false
+	_, exist := g.entities[e.ID()]
+	return exist
 }
 
-func (g *group) AddCallback(ev GroupEvent, c GroupCallback) {
-	cs, ok := g.callbacks[ev]
-	if !ok {
-		cs = make([]GroupCallback, 0)
+func (g *group) AddEvent(event EventType, action GroupChanged) {
+	actions := g.groupChanged[event]
+	g.groupChanged[event] = append(actions, action)
+}
+
+func (g *group) RemoveAllEvents() {
+	g.groupChanged = make(map[EventType][]GroupChanged)
+}
+
+// private
+func (g *group) onGroupChanged(ev EventType, e Entity) {
+	if events, ok := g.groupChanged[ev]; ok {
+		for _, event := range events {
+			event(g, e)
+		}
 	}
-	g.callbacks[ev] = append(cs, c)
 }
 
 func (g *group) addEntity(e Entity) {
 	if _, ok := g.entities[e.ID()]; !ok {
 		g.entities[e.ID()] = e
-		if g.cacheInvalidated == false {
+		if g.cache != nil {
 			g.cache = append(g.cache, e)
 		}
-		g.callback(EntityAdded, e)
+		g.onGroupChanged(EventAdded, e)
 	}
 }
 
 func (g *group) removeEntity(e Entity) {
 	if _, ok := g.entities[e.ID()]; ok {
 		delete(g.entities, e.ID())
-		if i := findIndex(g.cache, e); i != -1 {
-			g.cache = nil
-			g.cacheInvalidated = true
-		}
-		g.callback(EntityRemoved, e)
+		g.cache = nil
+		g.onGroupChanged(EventRemoved, e)
 	}
-}
-
-func (g *group) callback(ev GroupEvent, e Entity) {
-	if cs, ok := g.callbacks[ev]; ok {
-		for _, c := range cs {
-			c(g, e)
-		}
-	}
-}
-
-func findIndex(entities []Entity, e Entity) int {
-	for i, entity := range entities {
-		if entity == e {
-			return i
-		}
-	}
-	return -1
-}
-
-func removeIndexed(entities []Entity, i int) []Entity {
-	copy(entities[i:], entities[i+1:])
-	entities[len(entities)-1] = nil
-	new := entities[:len(entities)-1]
-	return new
 }

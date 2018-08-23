@@ -60,6 +60,10 @@ func (s *ActorService) RegisterMsg(t reflect.Type, fun MessageFunc)  {
 	s.router[t] = fun
 }
 
+func (s *ActorService) Update()  {
+	
+}
+
 func StartService(s IService)  {
 	ac := &ActorService{s, make(map[reflect.Type]MessageFunc)}
 	props := actor.FromProducer(func ()  {
@@ -80,8 +84,4 @@ func StartService(s IService)  {
 
 func DestoryService(s *ActorService)  {
 	s.serviceIns.OnDestory()
-}
-
-func (s *ActorService) Update()  {
-	
 }

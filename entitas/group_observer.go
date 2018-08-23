@@ -2,12 +2,6 @@ package entitas
 
 type ObserverEvent uint
 
-const (
-	ObserverEntityAdded ObserverEvent = iota
-	ObserverEntityRemoved
-	ObserverEntityAddedOrRemoved
-)
-
 type GroupObserver interface {
 	CollectedEntities() []Entity
 	Activate()
@@ -16,13 +10,13 @@ type GroupObserver interface {
 }
 
 type groupObserver struct {
-	entities map[Entity]struct{}
+	entities map[Entity]bool
 	active   bool
 }
 
-func NewGroupObserver(group Group, event ObserverEvent) *groupObserver {
+func NewGroupObserver(group Group, event EventType) GroupObserver {
 	observer := &groupObserver{
-		entities: make(map[Entity]struct{}),
+		entities: make(map[Entity]bool),
 		active:   true,
 	}
 
@@ -30,29 +24,22 @@ func NewGroupObserver(group Group, event ObserverEvent) *groupObserver {
 		addEntity(observer, group, entity)
 	}
 
-	switch event {
-	case ObserverEntityAdded:
-		group.AddCallback(EntityAdded, callback)
-	case ObserverEntityRemoved:
-		group.AddCallback(EntityRemoved, callback)
-	case ObserverEntityAddedOrRemoved:
-		group.AddCallback(EntityAdded, callback)
-		group.AddCallback(EntityRemoved, callback)
+	if event == EventAddedOrRemoved {
+		group.AddEvent(EventAdded, callback)
+		group.AddEvent(EventRemoved, callback)
+	} else {
+		group.AddEvent(event, callback)
 	}
 
 	return observer
 }
 
 func (observer *groupObserver) CollectedEntities() []Entity {
-	entities := make([]Entity, len(observer.entities))
+	entities := make([]Entity, 0, len(observer.entities))
 
-	i := 0
-
-	for entity, _ := range observer.entities {
-		entities[i] = entity
-		i++
+	for entity := range observer.entities {
+		entities = append(entities, entity)
 	}
-
 	return entities
 }
 
@@ -62,15 +49,14 @@ func (observer *groupObserver) Activate() {
 
 func (observer *groupObserver) Deactivate() {
 	observer.active = false
-	observer.ClearCollectedEntities()
 }
 
 func (observer *groupObserver) ClearCollectedEntities() {
-	observer.entities = make(map[Entity]struct{})
+	observer.entities = make(map[Entity]bool)
 }
 
 func addEntity(observer *groupObserver, group Group, entity Entity) {
 	if observer.active {
-		observer.entities[entity] = struct{}{}
+		observer.entities[entity] = true
 	}
 }

@@ -3,7 +3,6 @@ package entitas
 import (
 	"errors"
 	"fmt"
-	"sort"
 )
 
 var (
@@ -11,187 +10,219 @@ var (
 	ErrComponentDoesNotExist = errors.New("component does not exist")
 )
 
-type EntityID uint
+type EntityComponentChanged func(Entity, Component)
+
+type EntityID uint64
 
 type Entity interface {
-	AddComponent(cs ...Component) error
-	ReplaceComponent(cs ...Component)
-	WillRemoveComponent(ts ...ComponentType) error
-	RemoveComponent(ts ...ComponentType) error
-	RemoveAllComponents()
-	RemoveAllCallbacks()
-	AddCallback(ev ComponentEvent, cb ComponentCallback)
-	HasCallbacks() bool
-
 	ID() EntityID
-	HasComponent(ts ...ComponentType) bool
-	HasAnyComponent(ts ...ComponentType) bool
-	Component(t ComponentType) (Component, error)
+
+	CreateComponent(ts int) Component
+	AddComponent(cs ...Component) error
+	UpdateComponent(cs ...Component)
+	RemoveComponent(ts ...int) error
+	RemoveAllComponents()
+
+	HasComponent(ts ...int) bool
+	HasAnyComponent(ts ...int) bool
+	Component(t int) (Component, error)
 	Components() []Component
-	ComponentIndices() []ComponentType
+	ComponentTypes() []int
+
+	AddEvent(ev EventType, action EntityComponentChanged)
+	RemoveAllEvents()
+	HasEvents() bool
+
+	Destroy()
+	internalDestroy()
 }
-
-type ComponentEvent uint
-
-const (
-	ComponentAdded ComponentEvent = iota
-	ComponentReplaced
-	ComponentWillBeRemoved
-	ComponentRemoved
-)
-
-type ComponentCallback func(Entity, Component)
 
 type entity struct {
-	id         EntityID
-	components map[ComponentType]Component
-	callbacks  map[ComponentEvent][]ComponentCallback
+	id               EntityID
+	components       []Component
+	componentChanged map[EventType][]EntityComponentChanged
+
+	componentsCache     []Component
+	componentTypesCache []int
+
+	context Context
 }
 
-func NewEntity(id int) Entity {
+func newEntity(context Context, id EntityID) Entity {
 	return &entity{
-		id:         EntityID(id),
-		components: make(map[ComponentType]Component),
-		callbacks:  make(map[ComponentEvent][]ComponentCallback),
+		id:               id,
+		components:       make([]Component, TotalComponents),
+		componentChanged: make(map[EventType][]EntityComponentChanged),
+		context:          context,
 	}
 }
 
-func (e *entity) AddComponent(cs ...Component) error {
-	for _, c := range cs {
-		if e.HasComponent(c.Type()) {
-			return ErrComponentExists
-		}
-		e.components[c.Type()] = c
-		e.callback(ComponentAdded, c)
-	}
-	return nil
-}
-
-func (e *entity) ReplaceComponent(cs ...Component) {
-	for _, c := range cs {
-		has := e.HasComponent(c.Type())
-		e.components[c.Type()] = c
-		if has {
-			e.callback(ComponentReplaced, c)
-		} else {
-			e.callback(ComponentAdded, c)
+//private
+func (e *entity) onComponentChanged(ev EventType, c Component) {
+	if actions, ok := e.componentChanged[ev]; ok {
+		for _, action := range actions {
+			action(e, c)
 		}
 	}
 }
 
-func (e *entity) WillRemoveComponent(ts ...ComponentType) error {
+//public
+func (e *entity) CreateComponent(ts int) Component {
+	return e.context.CreateComponent(ts)
+}
+
+func (e *entity) HasComponent(ts ...int) bool {
 	for _, t := range ts {
-		c, err := e.Component(t)
-		if err != nil {
-			return err
-		}
-		e.callback(ComponentWillBeRemoved, c)
-	}
-	return nil
-}
-
-func (e *entity) RemoveComponent(ts ...ComponentType) error {
-	for _, t := range ts {
-		c, err := e.Component(t)
-		if err != nil {
-			return err
-		}
-		e.callback(ComponentWillBeRemoved, c)
-		delete(e.components, t)
-		e.callback(ComponentRemoved, c)
-	}
-	return nil
-}
-
-func (e *entity) RemoveAllComponents() {
-	components := e.components
-
-	for _, c := range components {
-		e.callback(ComponentWillBeRemoved, c)
-	}
-
-	e.components = make(map[ComponentType]Component)
-
-	for _, c := range components {
-		e.callback(ComponentRemoved, c)
-	}
-}
-
-func (e *entity) ID() EntityID {
-	return e.id
-}
-
-func (e *entity) AddCallback(ev ComponentEvent, cb ComponentCallback) {
-	cbs, ok := e.callbacks[ev]
-	if !ok {
-		cbs = make([]ComponentCallback, 0)
-	}
-	e.callbacks[ev] = append(cbs, cb)
-}
-
-func (e *entity) HasCallbacks() bool {
-	return len(e.callbacks) > 0
-}
-
-func (e *entity) RemoveAllCallbacks() {
-	e.callbacks = make(map[ComponentEvent][]ComponentCallback)
-}
-
-func (e *entity) HasComponent(ts ...ComponentType) bool {
-	for _, t := range ts {
-		if _, ok := e.components[t]; !ok {
+		if e.components[t] == nil {
 			return false
 		}
 	}
 	return true
 }
 
-func (e *entity) HasAnyComponent(ts ...ComponentType) bool {
+func (e *entity) HasAnyComponent(ts ...int) bool {
 	for _, t := range ts {
-		if _, ok := e.components[t]; ok {
+		if e.components[t] != nil {
 			return true
 		}
 	}
 	return false
 }
 
-func (e *entity) Component(t ComponentType) (Component, error) {
-	c, ok := e.components[t]
-	if !ok {
+func (e *entity) Component(t int) (Component, error) {
+	c := e.components[t]
+	if c == nil {
 		return nil, ErrComponentDoesNotExist
 	}
 	return c, nil
 }
 
 func (e *entity) Components() []Component {
-	components := make([]Component, len(e.components))
-	i := 0
-	for _, c := range e.components {
-		components[i] = c
-		i++
+	components := e.componentsCache
+	if components == nil {
+		components = make([]Component, 0, len(e.components))
+
+		for _, c := range e.components {
+			components = append(components, c)
+		}
+
+		e.componentsCache = components
 	}
-	sort.Sort(ComponentsByType(components))
 	return components
 }
 
-func (e *entity) ComponentIndices() []ComponentType {
-	types := make([]ComponentType, len(e.components))
-	i := 0
-	for t := range e.components {
-		types[i] = t
-		i++
+func (e *entity) ComponentTypes() []int {
+	types := e.componentTypesCache
+	if types == nil {
+		types = make([]int, 0, len(e.components))
+		for t, c := range e.components {
+			if c != nil {
+				types = append(types, int(t))
+			}
+		}
+		e.componentTypesCache = types
 	}
 	return types
 }
 
-func (e *entity) String() string {
-	return fmt.Sprintf("Entity_%d(%v)", e.id, e.Components())
+func (e *entity) AddComponent(cs ...Component) error {
+	for _, c := range cs {
+		t := c.Type()
+		if e.HasComponent(t) {
+			return ErrComponentExists
+		}
+		e.components[t] = c
+		e.onComponentChanged(EventAdded, c)
+	}
+
+	if len(cs) > 0 {
+		e.componentsCache = nil
+		e.componentTypesCache = nil
+	}
+
+	return nil
 }
 
-func (e *entity) callback(ev ComponentEvent, c Component) {
-	if cbs, ok := e.callbacks[ev]; ok {
-		for _, cb := range cbs {
-			cb(e, c)
+func (e *entity) UpdateComponent(cs ...Component) {
+	for _, c := range cs {
+		t := c.Type()
+		old := e.components[t]
+		e.components[t] = c
+		if old != nil {
+			if old != c {
+				e.onComponentChanged(EventRemoved, old)
+			}
+			e.onComponentChanged(EventUpdated, c)
+		} else {
+			e.onComponentChanged(EventAdded, c)
 		}
 	}
+
+	if len(cs) > 0 {
+		e.componentsCache = nil
+		e.componentTypesCache = nil
+	}
+}
+
+func (e *entity) RemoveComponent(ts ...int) error {
+	for _, t := range ts {
+		c, err := e.Component(t)
+		if err != nil {
+			return err
+		}
+		e.components[t] = nil
+		e.onComponentChanged(EventRemoved, c)
+	}
+
+	if len(ts) > 0 {
+		e.componentsCache = nil
+		e.componentTypesCache = nil
+	}
+
+	return nil
+}
+
+func (e *entity) RemoveAllComponents() {
+	components := e.components
+
+	e.components = make([]Component, TotalComponents)
+	e.componentsCache = nil
+	e.componentTypesCache = nil
+
+	for _, c := range components {
+		if c != nil {
+			e.onComponentChanged(EventRemoved, c)
+		}
+	}
+
+}
+
+func (e *entity) ID() EntityID {
+	return e.id
+}
+
+func (e *entity) AddEvent(ev EventType, action EntityComponentChanged) {
+	actions := e.componentChanged[ev]
+	e.componentChanged[ev] = append(actions, action)
+}
+
+func (e *entity) HasEvents() bool {
+	return len(e.componentChanged) > 0
+}
+
+func (e *entity) RemoveAllEvents() {
+	e.componentChanged = make(map[EventType][]EntityComponentChanged)
+}
+
+func (e *entity) Destroy() {
+	e.context.destroyEntity(e)
+}
+
+func (e *entity) internalDestroy() {
+	e.RemoveAllComponents()
+	e.RemoveAllEvents()
+}
+
+func (e *entity) String() string {
+	return fmt.Sprintf("Entity_%d(types %v)", e.id, e.ComponentTypes())
 }
