@@ -36,8 +36,6 @@ func ConnectDB(dataSource string, dbName string) (*DBClient, error) {
 
 //Insert 插入数据
 func (client *DBClient) Insert(obj interface{}) (int64, error) {
-	//fmt.Println("####", client)
-	//fmt.Println(client.ormDB, "  ", obj)
 	return client.ormDB.Insert(obj)
 }
 
