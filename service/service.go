@@ -4,18 +4,19 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/cloudfreexiao/antnet/ecs"
 	"github.com/cloudfreexiao/antnet/logger"
+
 	"github.com/AsynkronIT/protoactor-go/actor"
 	"github.com/AsynkronIT/protoactor-go/remote"
 )
 
-type Context actor.Context
-
-// TODO: add ECS context
+type ActorContext actor.Context
 
 type IService interface {
 	IServiceData
-	OnReceive(context Context)
+
+	OnReceive(context actor.Context)
 	OnInit()
 	OnStart(as *ActorService)
 	OnRun()
@@ -29,6 +30,7 @@ type MessageFunc func(context actor.Context)
 type ActorService struct {
 	serviceIns IService
 	router map[reflect.Type] MessageFunc
+	ecsctx *ecs.Context
 }
 
 
@@ -46,10 +48,10 @@ func (s *ActorService) Receive(context actor.Context)  {
 		s.serviceIns.OnRun()
 	default:
 		DEBUG("recv msg:", Inspect(msg))
-		s.serviceIns.OnReceive(context.(Context))
+		s.serviceIns.OnReceive(context.(ActorContext))
 		fun := s.router[reflect.TypeOf(msg)]
 		if fun != nil {
-			fun(context.(Context))
+			fun(context.(ActorContext))
 		} else {
 			ERROR("recv msg but not found func:", Inspect(msg))
 		}
@@ -60,12 +62,9 @@ func (s *ActorService) RegisterMsg(t reflect.Type, fun MessageFunc)  {
 	s.router[t] = fun
 }
 
-func (s *ActorService) Update()  {
-	
-}
 
 func StartService(s IService)  {
-	ac := &ActorService{s, make(map[reflect.Type]MessageFunc)}
+	ac := &ActorService{s, make(map[reflect.Type]MessageFunc), ecs.NewContext(0)}
 	props := actor.FromProducer(func ()  {
 		actor.Actor {return ac}
 	})
@@ -75,10 +74,11 @@ func StartService(s IService)  {
 	}
 
 	pid, err := actor.SpawnNamed(props, s.GetName())
-	if err != nil {
-
+	if err == nil {
+		s.SetPID(pid)
+		s.OnStart(ac)
 	} else {
-		ERROR("actor SpawnNamed error:", Inspect(err))
+		ERROR("Actor SpawnNamed error:", Inspect(err))
 	}
 }
 
