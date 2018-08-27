@@ -30,7 +30,7 @@ type MessageFunc func(context actor.Context)
 type ActorService struct {
 	serviceIns IService
 	router map[reflect.Type] MessageFunc
-	ecsctx *ecs.Context
+	ctx ecs.Context
 }
 
 
@@ -64,7 +64,7 @@ func (s *ActorService) RegisterMsg(t reflect.Type, fun MessageFunc)  {
 
 
 func StartService(s IService)  {
-	ac := &ActorService{s, make(map[reflect.Type]MessageFunc), ecs.NewContext(0)}
+	ac := &ActorService{s, make(map[reflect.Type]MessageFunc), ecs.Context{}}
 	props := actor.FromProducer(func ()  {
 		actor.Actor {return ac}
 	})
